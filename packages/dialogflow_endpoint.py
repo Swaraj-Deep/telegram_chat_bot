@@ -30,7 +30,7 @@ class DialogFlowWrapper:
                 helplines[key].append(value)
         return helplines
 
-    def process_input(self, text_to_be_analyzed, chat_id):
+    def process_input(self, text_to_be_analyzed, chat_id, first_name):
         SESSION_ID = chat_id
         session_client = dialogflow.SessionsClient()
         session = session_client.session_path(
@@ -38,7 +38,6 @@ class DialogFlowWrapper:
         text_input = dialogflow.types.TextInput(
             text=text_to_be_analyzed, language_code=self.DIALOGFLOW_LANGUAGE_CODE)
         query_input = dialogflow.types.QueryInput(text=text_input)
-
         knowledge_base_path = dialogflow.knowledge_bases_client \
             .KnowledgeBasesClient \
             .knowledge_base_path(self.DIALOGFLOW_PROJECT_ID, 'MTY5NjYxNzQ3MDEwOTUyMjMyOTY')
@@ -58,9 +57,9 @@ class DialogFlowWrapper:
         elif detected_intent == 'Knowledge.KnowledgeBase.MTY5NjYxNzQ3MDEwOTUyMjMyOTY':
             reply = self.response_faq(response)
         elif detected_intent == 'Default Welcome Intent':
-            reply = self.response_welcome(response)
+            reply = self.response_welcome(response, first_name)
         elif detected_intent == 'Default Fallback Intent':
-            reply = self.response_fallback(response)
+            reply = self.response_fallback(response, first_name)
         elif detected_intent == 'country_handler':
             reply = self.response_country_handler(response)
         elif detected_intent == 'helpline':
@@ -113,16 +112,30 @@ class DialogFlowWrapper:
         country_name = response.query_result.parameters.fields['geo-country'].string_value
         if country_name == "":
             return response.query_result.fulfillment_text
-        print(response.query_result.fulfillment_text)
+        reply = ""
+        confirmed_cases, active_cases, recovered, deaths = self.covidwrapper.get_country_data()
+        reply += f'The details for India\nConfirmed Cases: {confirmed_cases}\nActive Cases: {active_cases}\nRecovered: {recovered}\nDeaths: {deaths}\n'
+        return reply
 
     def response_faq(self, response):
         return response.query_result.fulfillment_text
 
-    def response_welcome(self, response):
-        return response.query_result.fulfillment_text
+    def prefix_reply(self, responses):
+        """Returns a random string from a given set of responses"""
+        pos = random.randint(0, len(responses) - 1)
+        return responses[pos]
 
-    def response_fallback(self, response):
-        return response.query_result.fulfillment_text
+    def response_welcome(self, response, first_name):
+        emoticons = ['😌', '🙂']
+        responses = ['Hi ', 'Hello ', 'Whats up ', 'How are you ']
+        reply = self.prefix_reply(responses) + first_name
+        return "\n".join([self.prefix_reply(emoticons), reply])
+
+    def response_fallback(self, response, first_name):
+        phrase = "Wait there!! I am still learning"
+        responses = ['🙄', '🤔', '😬', '😐']
+        reply = self.prefix_reply(responses) + "\n" + phrase
+        return reply
 
 
 if __name__ == "__main__":

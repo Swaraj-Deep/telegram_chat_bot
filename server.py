@@ -9,6 +9,8 @@ from telegram.replykeyboardmarkup import ReplyKeyboardMarkup
 from telegram.replykeyboardremove import ReplyKeyboardRemove
 from packages import dialogflow_endpoint
 from telegram import KeyboardButton
+import packages.location_mapper
+import packages.covid_endpoint
 import configparser as cfg
 import os
 import random
@@ -28,6 +30,8 @@ class Server:
         self.dispatcher.add_handler(CommandHandler("end", self.end))
         self.dispatcher.add_handler(
             MessageHandler(Filters.all, self.make_response, pass_user_data=True))
+        self.lm = packages.location_mapper.LocationMapper()
+        self.covidwrapper = packages.covid_endpoint.CovidWrapper()
 
     def read_token_from_config_file(self, config):
         """ Reads the token from the config.cfg file
@@ -71,7 +75,8 @@ class Server:
         parent_dir = os.getcwd()
         dir_name = os.path.join(parent_dir, 'logfiles')
         file_name = 'messages.log'
-        reply = self.dialogflow.process_input(update.message.text, update.message.chat_id)
+        reply = self.dialogflow.process_input(
+            update.message.text, update.message.chat_id, update.message.from_user.first_name)
         log_reply = reply.replace('\n', ' ')
         log_reply = log_reply.replace(',', ' ')
         line = f'{update.message.date}, {update.message.from_user.first_name}, {update.message.from_user.last_name}, {update.message.chat_id}, {update.message.text}, {log_reply}\n'
@@ -96,6 +101,28 @@ class Server:
         reply = 'This is all I can understand ' + update.message.sticker.emoji
         bot.send_message(chat_id=update.effective_chat.id, text=reply)
 
+    def respond_location(self, update: Update, context: CallbackContext):
+        """Respond to the location sent by the user"""
+        bot: Bot = context.bot
+        coordinates = f"{update.message['location']['latitude']}, {update.message['location']['longitude']}"
+        lst_location = self.lm.get_location_info(coordinates)
+        city_name = lst_location[0]
+        reply = ""
+        confirmed_cases, active_cases, recovered, deaths = self.covidwrapper.get_district_data(
+            city_name)
+        reply += f'The details for {city_name}\nConfirmed Cases: {confirmed_cases}\nActive Cases: {active_cases}\nRecovered: {recovered}\nDeaths: {deaths}\n'
+        state_name = lst_location[1]
+        bot.send_message(chat_id=update.effective_chat.id, text=reply)
+        reply = ""
+        confirmed_cases, active_cases, recovered, deaths = self.covidwrapper.get_state_data(
+            state_name)
+        reply += f'The details for {state_name}\nConfirmed Cases: {confirmed_cases}\nActive Cases: {active_cases}\nRecovered: {recovered}\nDeaths: {deaths}\n'
+        bot.send_message(chat_id=update.effective_chat.id, text=reply)
+        reply = ""
+        confirmed_cases, active_cases, recovered, deaths = self.covidwrapper.get_country_data()
+        reply += f'The details for India\nConfirmed Cases: {confirmed_cases}\nActive Cases: {active_cases}\nRecovered: {recovered}\nDeaths: {deaths}\n'
+        bot.send_message(chat_id=update.effective_chat.id, text=reply)
+
     def reply_to_messages(self, update: Update, context: CallbackContext):
         """Determine message type and then reply accordingly"""
         bot: Bot = context.bot
@@ -108,9 +135,10 @@ class Server:
         elif update.message.sticker:
             self.respond_sticker(update, context)
         elif update.message.location:
-            print("HI location detected")
+            self.respond_location(update, context)
         elif update.message.contact:
-            print("contackt kjd")
+            # Respond to contact messages
+            pass
 
     def make_response(self, update: Update, context: CallbackContext):
         """Callback for making reponses to the user"""
@@ -123,10 +151,11 @@ class Server:
 
 if __name__ == "__main__":
     parent_dir = os.getcwd()
-    dir_name = os.path.join (parent_dir, 'logfiles')
+    dir_name = os.path.join(parent_dir, 'logfiles')
     file_name = 'messages.log'
     with open(os.path.join(dir_name, file_name), 'w') as file_pointer:
-        file_pointer.writelines(f'date, first_name, last_name, chat_id, message, reply\n')
+        file_pointer.writelines(
+            f'date, first_name, last_name, chat_id, message, reply\n')
     server = Server()
     print(f'Server Started')
     server.start_server()

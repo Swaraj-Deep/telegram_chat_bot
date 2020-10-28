@@ -13,7 +13,7 @@ class LocationMapper:
         district = address['state_district']
         state = address['state']
         country = address['country']
-        return (district, state, country)
+        return [district, state, country]
 
 if __name__ == "__main__":
     lm = LocationMapper()

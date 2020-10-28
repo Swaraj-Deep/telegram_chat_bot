@@ -77,10 +77,13 @@ class CovidWrapper:
                     recovered += districts['delta']['recovered']
         return (f'{confirmed_cases:,}', f'{active_cases:,}', f'{recovered:,}', f'{deaths:,}')
 
-    def get_data(self):
-        response = requests.get(self.state_district_wise)
+    def get_country_data(self):
+        response = requests.get(self.overall_data)
+        data = self.check_error(response, self.overall_data)
+        data = data['data']['unofficial-summary'][0]
+        return (f"{data['total']:,}", f"{data['active']:,}", f"{data['recovered']:,}", f"{data['deaths']:,}")
 
 
 if __name__ == "__main__":
     c = CovidWrapper()
-    print(c.get_state_data('maharashtra'))
+    print(c.get_country_data())
